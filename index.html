@@ -414,7 +414,7 @@ body.pdf-mode *{animation:none !important;transition:none !important}
             <div class="city-date"><dt>Barcelona</dt><dd>Del 7 al 8 de octubre de 2026</dd></div>
             <div class="city-date"><dt>Madrid</dt><dd>Del 20 al 21 de octubre de 2026</dd></div>
           </div>
-          <div><dt>Respuestas</dt><dd id="factN">–</dd></div>
+          <div><dt>Total de respuestas</dt><dd id="factN">–</dd></div>
           <div><dt>Comprarían el producto</dt><dd id="factBuy">–</dd></div>
         </dl>
       </div>
@@ -654,7 +654,7 @@ const SENT_COLORS = { Positivo: C.dusk, Neutro: C.neutral, Negativo: C.rasp };
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const state = {
-  rows: [], headers: {}, source: '', liveErrors: [], excluded: 0, preExcluded: 0,
+  rows: [], totalRows: 0, headers: {}, source: '', liveErrors: [], excluded: 0, preExcluded: 0,
   f: { compra: 'all', gen: 'all', age: 'all' },
   compare: true,
   vb: { q: '', sent: 'all', theme: null, limit: 12 }
@@ -793,8 +793,10 @@ function buildRows(matrix) {
   state.headers = Object.fromEntries(Object.entries(idx).map(([k, i]) => [k, heads[i]]));
 
   const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return (n >= 1 && n <= 5) ? n : null; };
+  const sourceRows = matrix.slice(hi + 1);
   const rows = []; state.excluded = state.preExcluded || 0;
-  matrix.slice(hi + 1).forEach(r => {
+  state.totalRows = sourceRows.length + state.preExcluded;
+  sourceRows.forEach(r => {
     const get = k => idx[k] == null ? '' : String(r[idx[k]] ?? '').replace(/\uFFFC/g, '').trim();
     if (CONFIG.notReceived && CONFIG.notReceived.test(norm(get('porque')))) { state.excluded++; return; }
     const o = { ts: get('ts'), porque: emptyAnswer(get('porque')) ? '' : get('porque'), cat: get('cat') };
@@ -835,7 +837,7 @@ async function loadData() {
       try {
         const txt = await fetchText(url);
         state.rows = buildRows(toMatrix(txt)); state.source = 'live';
-        setStatus('live', `Datos en vivo de la hoja (${state.rows.length} respuestas${exNote()})`);
+        setStatus('live', 'Datos de la hoja actualizados');
         return;
       } catch (e) {
         errors.push(src.name + ': ' + e.message);
@@ -847,13 +849,11 @@ async function loadData() {
   const snap = $('#snapshot').textContent.trim();
   state.rows = buildRows(toMatrix(snap)); state.source = 'local';
   console.error('[datos] Sin conexión con la hoja; se muestra la copia local.', errors);
-  setStatus('local', `Copia local del ${CONFIG.snapshotDate} (${state.rows.length} respuestas${exNote()}). Sin conexión con la hoja.`);
+  setStatus('local', `Copia local del ${CONFIG.snapshotDate}. Sin conexión con la hoja.`);
 }
-const exNote = () => state.excluded ? `; ${state.excluded} excluidas por no haber recibido o probado el producto` : '';
 function footNote() {
   const el = $('#footSrc'); if (!el) return;
-  el.textContent = 'Samplia Insights. Datos de la hoja de respuestas de la encuesta.' +
-    (state.excluded ? ` Se excluyen ${state.excluded} respuestas de personas que indican no haber recibido o probado el producto.` : '');
+  el.textContent = 'Samplia Insights. Datos de la hoja de respuestas de la encuesta.';
 }
 function setStatus(kind, text) { const el = $('#status'); el.className = 'status ' + kind; el.lastElementChild.textContent = text; }
 
@@ -1196,7 +1196,7 @@ function renderInsights() {
 function renderHero() {
   const sel = rowsSel(), all = rowsAll();
   const si = all.filter(r => r.compra === 'Sí').length, n = all.filter(r => r.compra).length;
-  $('#factN').textContent = sel.length + (sel.length !== state.rows.length ? ` de ${state.rows.length}` : '');
+  $('#factN').textContent = state.totalRows.toLocaleString('es-ES');
   $('#factBuy').textContent = pct(si, n);
   $$('[data-seal-n]').forEach(el => el.textContent = sel.length);
   const nSi = all.filter(r => r.compra === 'Sí').length, nNo = all.filter(r => r.compra === 'No').length;
@@ -1209,7 +1209,8 @@ function renderActiveFilter() {
   if (state.f.age !== 'all') parts.push(`<span class="pill">${state.f.age} años <button type="button" data-clear="age" aria-label="Quitar filtro de edad">×</button></span>`);
   if (state.vb.theme) parts.push(`<span class="pill">Tema: <b>${esc(state.vb.theme.v)}</b> <button type="button" data-clear="theme" aria-label="Quitar filtro de tema">×</button></span>`);
   const n = rowsSel().length;
-  $('#activeFilter').innerHTML = parts.length ? `<span>Mostrando ${n} respuestas con:</span>${parts.join('')}` : `<span>Mostrando las ${n} respuestas.</span>`;
+  const count = `Mostrando ${n.toLocaleString('es-ES')} respuestas de ${state.totalRows.toLocaleString('es-ES')} filas`;
+  $('#activeFilter').innerHTML = parts.length ? `<span>${count} con:</span>${parts.join('')}` : `<span>${count}.</span>`;
 }
 
 function renderQuestions() {
