@@ -616,8 +616,8 @@ const CONFIG = {
     return [
       { name: 'CSV export',  url: gid => `${base}/export?format=csv${g(gid)}` },
       { name: 'gviz CSV',    url: gid => `${base}/gviz/tq?tqx=out:csv&headers=1${g(gid)}` },
-      { name: 'gviz «Extracto 1»',       url: () => `${base}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent('Extracto 1')}` },
-      { name: 'gviz «Hoja vinculada 1»', url: () => `${base}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent('Hoja vinculada 1')}` }
+      { tab: true, name: 'gviz «Extracto 1»',       url: () => `${base}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent('Extracto 1')}` },
+      { tab: true, name: 'gviz «Hoja vinculada 1»', url: () => `${base}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent('Hoja vinculada 1')}` }
     ];
   })(),
   // ID de pregunta (cabecera de la hoja Samplia) → atributo del informe.
@@ -837,7 +837,7 @@ async function loadData() {
   setStatus('', 'Cargando datos…');
   const errors = [];
   if (['http:', 'https:', 'file:'].includes(location.protocol)) {
-    const tries = await Promise.all(CONFIG.sources.map(async src => {
+    const attempt = list => Promise.all(list.map(async src => {
       const url = src.url(CONFIG.gid);
       try {
         const rows = buildRows(toMatrix(await fetchText(url)));
@@ -848,7 +848,11 @@ async function loadData() {
         return null;
       }
     }));
-    const best = tries.filter(Boolean).sort((a, b) => b.rows.length - a.rows.length || (b.totalRows || 0) - (a.totalRows || 0))[0];
+    const pick = tries => tries.filter(Boolean).sort((a, b) => b.rows.length - a.rows.length || (b.totalRows || 0) - (a.totalRows || 0))[0];
+    // Manda la pestaña de datos por defecto (export / gviz). Las pestañas con nombre solo se usan si ninguna de esas URL responde:
+    // elegir «la que más filas trae» podía acabar leyendo otra pestaña (Extracto / Hoja vinculada) y mostrar más filas que la hoja de datos.
+    let best = pick(await attempt(CONFIG.sources.filter(s => !s.tab)));
+    if (!best) best = pick(await attempt(CONFIG.sources.filter(s => s.tab)));
     if (best) {
       Object.assign(state, { rows: best.rows, excluded: best.excluded, totalRows: best.totalRows, headers: best.headers, source: 'live' });
       console.info('[datos] Fuente usada: ' + best.src.name + ' (' + best.rows.length + ' respuestas)');
